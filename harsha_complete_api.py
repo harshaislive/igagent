@@ -483,6 +483,7 @@ def chat():
         response = harsha.process_message(user_id, message)
         processing_time = time.time() - start_time
         
+        # Get stats AFTER processing to reflect any changes made during processing
         stats = harsha.get_user_stats(user_id)
         
         # If response is empty (AI not active), return special status
