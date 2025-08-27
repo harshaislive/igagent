@@ -150,10 +150,10 @@ class HarshaMemoryAPI:
                 (user_id, message, response)
             )
             
-            # Update stats
+            # Update stats (preserve ai_active status)
             cursor.execute(
-                "INSERT OR REPLACE INTO user_stats (user_id, last_active, total_messages) VALUES (?, ?, COALESCE((SELECT total_messages FROM user_stats WHERE user_id = ?) + 1, 1))",
-                (user_id, datetime.now().isoformat(), user_id)
+                "INSERT OR REPLACE INTO user_stats (user_id, last_active, total_messages, ai_active, games_won) VALUES (?, ?, COALESCE((SELECT total_messages FROM user_stats WHERE user_id = ?) + 1, 1), COALESCE((SELECT ai_active FROM user_stats WHERE user_id = ?), 0), COALESCE((SELECT games_won FROM user_stats WHERE user_id = ?), 0))",
+                (user_id, datetime.now().isoformat(), user_id, user_id, user_id)
             )
             
             self.conn.commit()
