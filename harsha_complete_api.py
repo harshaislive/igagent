@@ -22,8 +22,8 @@ class HarshaMemoryAPI:
     def __init__(self):
         # Azure OpenAI
         self.ai_client = AzureOpenAI(
-            api_version="2024-12-01-preview",
-            azure_endpoint="https://harsh-mdpv63be-eastus2.cognitiveservices.azure.com/",
+            api_version=os.getenv("AZURE_API_VERSION", "2024-12-01-preview"),
+            azure_endpoint=os.getenv("AZURE_ENDPOINT"),
             api_key=os.getenv("AZURE_OPENAI_API_KEY")
         )
         
@@ -292,7 +292,7 @@ class HarshaMemoryAPI:
             messages.append({"role": "user", "content": message})
             
             response = self.ai_client.chat.completions.create(
-                model="gpt-5-chat",
+                model=os.getenv("AZURE_DEPLOYMENT", "gpt-5-chat"),
                 messages=messages,
                 functions=self.functions,
                 function_call="auto",
