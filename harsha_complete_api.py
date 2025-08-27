@@ -20,6 +20,13 @@ app = Flask(__name__)
 
 class HarshaMemoryAPI:
     def __init__(self):
+        # Check required environment variables
+        required_env_vars = ["AZURE_OPENAI_API_KEY", "AZURE_ENDPOINT"]
+        missing_vars = [var for var in required_env_vars if not os.getenv(var)]
+        
+        if missing_vars:
+            raise ValueError(f"Missing required environment variables: {', '.join(missing_vars)}")
+        
         # Azure OpenAI
         self.ai_client = AzureOpenAI(
             api_version=os.getenv("AZURE_API_VERSION", "2024-12-01-preview"),
@@ -350,9 +357,31 @@ def home():
         "endpoints": {
             "chat": "POST /chat",
             "memory": "GET /memory/{user_id}",
-            "stats": "GET /stats"
+            "stats": "GET /stats",
+            "health": "GET /health"
         }
     })
+
+@app.route('/health', methods=['GET'])
+def health():
+    """Health check endpoint for monitoring"""
+    try:
+        # Test database connection
+        cursor = harsha.conn.cursor()
+        cursor.execute("SELECT 1")
+        cursor.fetchone()
+        
+        return jsonify({
+            "status": "healthy",
+            "database": "connected",
+            "timestamp": datetime.now().isoformat()
+        })
+    except Exception as e:
+        return jsonify({
+            "status": "unhealthy", 
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }), 500
 
 @app.route('/chat', methods=['POST'])
 def chat():
@@ -421,10 +450,15 @@ def global_stats():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
+    # Get port from environment (for deployment) or default to 5001
+    port = int(os.getenv('PORT', 5001))
+    
     print("🚀 Starting Harsha's Complete Memory API...")
-    print("📡 Available at: http://localhost:5001")
+    print(f"📡 Available at: http://0.0.0.0:{port}")
     print("💾 Memory: SQLite database (persistent)")
     print("🤖 Features: Function calling, memory recall, user stats")
-    print("💬 Test: curl -X POST http://localhost:5001/chat -H 'Content-Type: application/json' -d '{\"message\":\"hey remember me?\", \"user_id\":\"test123\"}'")
+    print(f"💬 Test: curl -X POST http://localhost:{port}/chat -H 'Content-Type: application/json' -d '{{\"message\":\"hey remember me?\", \"user_id\":\"test123\"}}'")
     
-    app.run(host='0.0.0.0', port=5001, debug=True)
+    # Use debug=False in production
+    debug_mode = os.getenv('FLASK_ENV') == 'development'
+    app.run(host='0.0.0.0', port=port, debug=debug_mode)
