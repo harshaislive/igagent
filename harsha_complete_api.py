@@ -220,6 +220,51 @@ class HarshaMemoryAPI:
         except:
             return "my memory's being weird rn"
     
+    def detect_intent(self, message: str) -> str:
+        """Use LLM to detect activation/deactivation intent"""
+        try:
+            intent_prompt = f"""
+            Analyze this message and determine if the user wants to:
+            1. ACTIVATE an AI alter ego/chatbot 
+            2. DEACTIVATE/STOP an AI alter ego/chatbot
+            3. NEITHER (normal conversation)
+
+            Message: "{message}"
+
+            Examples:
+            - "talk to alter" → activate
+            - "I want to chat with your alter ego" → activate  
+            - "activate AI" → activate
+            - "turn on bot mode" → activate
+            - "bye alter" → deactivate
+            - "stop the AI" → deactivate
+            - "turn off bot" → deactivate
+            - "hello there" → neither
+            - "how are you" → neither
+
+            Respond with only: "activate", "deactivate", or "neither"
+            """
+            
+            response = self.ai_client.chat.completions.create(
+                model=os.getenv("AZURE_DEPLOYMENT", "gpt-5-chat"),
+                messages=[{"role": "user", "content": intent_prompt}],
+                max_tokens=5,
+                temperature=0.1
+            )
+            
+            intent = response.choices[0].message.content.strip().lower()
+            return intent if intent in ["activate", "deactivate"] else "neither"
+            
+        except Exception as e:
+            print(f"Intent detection error: {e}")
+            # Fallback to keyword detection
+            message_lower = message.lower()
+            if any(word in message_lower for word in ["talk to alter", "activate", "turn on", "start ai", "bot mode"]):
+                return "activate"
+            elif any(word in message_lower for word in ["bye alter", "deactivate", "turn off", "stop", "disable"]):
+                return "deactivate"
+            return "neither"
+    
     # FUNCTION IMPLEMENTATIONS
     def start_emoji_game(self, user_id: str) -> str:
         puzzle = random.choice(self.games["emoji_puzzles"])
@@ -347,15 +392,17 @@ class HarshaMemoryAPI:
         message = message.strip()
         message_lower = message.lower()
         
-        # Check for activation commands FIRST
-        if "hey harsha" in message_lower or "activate" in message_lower:
-            self.set_ai_active(user_id, True)
-            return "🤖 AI activated! Ready to chat with chaotic energy! What's good?"
+        # Use LLM to detect activation/deactivation intent
+        intent = self.detect_intent(message)
         
-        if "bye harsha" in message_lower or "deactivate" in message_lower:
+        if intent == "activate":
+            self.set_ai_active(user_id, True)
+            return "🤖 Alter ego activated! Ready to chat with chaotic energy! What's good?"
+        
+        if intent == "deactivate":
             if self.is_ai_active(user_id):
                 self.set_ai_active(user_id, False)
-                return "✌️ AI deactivated. Peace out! Say 'hey harsha' to reactivate."
+                return "✌️ Alter ego deactivated. Peace out! Say something like 'talk to alter' to reactivate."
             else:
                 return ""  # Don't respond if AI wasn't active
         
