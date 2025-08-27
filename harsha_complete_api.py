@@ -124,6 +124,7 @@ class HarshaMemoryAPI:
                 user_id TEXT PRIMARY KEY,
                 total_messages INTEGER DEFAULT 0,
                 games_won INTEGER DEFAULT 0,
+                ai_active BOOLEAN DEFAULT FALSE,
                 last_active DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         ''')
@@ -177,14 +178,31 @@ class HarshaMemoryAPI:
         """Get user stats"""
         try:
             cursor = self.conn.cursor()
-            cursor.execute("SELECT total_messages, games_won FROM user_stats WHERE user_id = ?", (user_id,))
+            cursor.execute("SELECT total_messages, games_won, ai_active FROM user_stats WHERE user_id = ?", (user_id,))
             row = cursor.fetchone()
             
             if row:
-                return {"total_messages": row[0] or 0, "games_won": row[1] or 0}
-            return {"total_messages": 0, "games_won": 0}
+                return {"total_messages": row[0] or 0, "games_won": row[1] or 0, "ai_active": bool(row[2])}
+            return {"total_messages": 0, "games_won": 0, "ai_active": False}
         except:
-            return {"total_messages": 0, "games_won": 0}
+            return {"total_messages": 0, "games_won": 0, "ai_active": False}
+    
+    def set_ai_active(self, user_id: str, active: bool):
+        """Set AI active status for user"""
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute(
+                "INSERT OR REPLACE INTO user_stats (user_id, ai_active, last_active, total_messages, games_won) VALUES (?, ?, ?, COALESCE((SELECT total_messages FROM user_stats WHERE user_id = ?), 0), COALESCE((SELECT games_won FROM user_stats WHERE user_id = ?), 0))",
+                (user_id, active, datetime.now().isoformat(), user_id, user_id)
+            )
+            self.conn.commit()
+        except Exception as e:
+            print(f"Error setting AI active: {e}")
+    
+    def is_ai_active(self, user_id: str) -> bool:
+        """Check if AI is active for user"""
+        stats = self.get_user_stats(user_id)
+        return stats.get("ai_active", False)
     
     def search_memory(self, user_id: str, topic: str) -> str:
         """Search previous conversations"""
@@ -322,11 +340,30 @@ class HarshaMemoryAPI:
             return random.choice(["my brain glitched 🤖", "error 404: wit not found"])
     
     def process_message(self, user_id: str, message: str) -> str:
-        """Main processing with memory"""
+        """Main processing with memory and AI activation control"""
         if not message.strip():
-            return "yo send me something! 👀"
+            return ""
         
         message = message.strip()
+        message_lower = message.lower()
+        
+        # Check for activation commands FIRST
+        if "hey harsha" in message_lower or "activate" in message_lower:
+            self.set_ai_active(user_id, True)
+            return "🤖 AI activated! Ready to chat with chaotic energy! What's good?"
+        
+        if "bye harsha" in message_lower or "deactivate" in message_lower:
+            if self.is_ai_active(user_id):
+                self.set_ai_active(user_id, False)
+                return "✌️ AI deactivated. Peace out! Say 'hey harsha' to reactivate."
+            else:
+                return ""  # Don't respond if AI wasn't active
+        
+        # Check if AI is active for this user
+        if not self.is_ai_active(user_id):
+            return ""  # Return empty response if AI is not active
+        
+        # AI is active - proceed with normal processing
         
         # 1. Handle ongoing games
         game_response = self.handle_ongoing_games(user_id, message)
@@ -401,8 +438,21 @@ def chat():
         
         stats = harsha.get_user_stats(user_id)
         
+        # If response is empty (AI not active), return special status
+        if not response:
+            return jsonify({
+                "response": "",
+                "ai_active": False,
+                "user_id": user_id,
+                "processing_time_ms": round(processing_time * 1000, 2),
+                "user_stats": stats,
+                "message": "AI not active. Send 'hey harsha' to activate.",
+                "timestamp": datetime.now().isoformat()
+            })
+        
         return jsonify({
             "response": response,
+            "ai_active": stats.get("ai_active", False),
             "user_id": user_id,
             "processing_time_ms": round(processing_time * 1000, 2),
             "user_stats": stats,
