@@ -508,26 +508,27 @@ def chat():
         # Get stats AFTER processing to reflect any changes made during processing
         stats = harsha.get_user_stats(user_id)
         
-        # If response is empty (AI not active), return special status
+        # Return ManyChat Dynamic Block format
         if not response:
+            # AI not active - return empty messages array (no response sent)
             return jsonify({
-                "response": "",
-                "ai_active": False,
-                "user_id": user_id,
-                "processing_time_ms": round(processing_time * 1000, 2),
-                "user_stats": stats,
-                "message": "AI not active. Send 'hey harsha' to activate.",
-                "timestamp": datetime.now().isoformat()
+                "version": "v2",
+                "content": {
+                    "messages": []
+                }
             })
         
+        # AI active - return message in ManyChat format
         return jsonify({
-            "response": response,
-            "ai_active": stats.get("ai_active", False),
-            "user_id": user_id,
-            "processing_time_ms": round(processing_time * 1000, 2),
-            "user_stats": stats,
-            "has_memory": len(harsha.get_conversation_history(user_id, 1)) > 0,
-            "timestamp": datetime.now().isoformat()
+            "version": "v2",
+            "content": {
+                "messages": [
+                    {
+                        "type": "text",
+                        "text": response
+                    }
+                ]
+            }
         })
         
     except Exception as e:
