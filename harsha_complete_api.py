@@ -191,11 +191,25 @@ class HarshaMemoryAPI:
         """Set AI active status for user"""
         try:
             cursor = self.conn.cursor()
-            cursor.execute(
-                "INSERT OR REPLACE INTO user_stats (user_id, ai_active, last_active, total_messages, games_won) VALUES (?, ?, ?, COALESCE((SELECT total_messages FROM user_stats WHERE user_id = ?), 0), COALESCE((SELECT games_won FROM user_stats WHERE user_id = ?), 0))",
-                (user_id, active, datetime.now().isoformat(), user_id, user_id)
-            )
+            # First check if user exists
+            cursor.execute("SELECT user_id FROM user_stats WHERE user_id = ?", (user_id,))
+            exists = cursor.fetchone()
+            
+            if exists:
+                # Update existing user
+                cursor.execute(
+                    "UPDATE user_stats SET ai_active = ?, last_active = ? WHERE user_id = ?",
+                    (active, datetime.now().isoformat(), user_id)
+                )
+            else:
+                # Insert new user
+                cursor.execute(
+                    "INSERT INTO user_stats (user_id, ai_active, last_active, total_messages, games_won) VALUES (?, ?, ?, 0, 0)",
+                    (user_id, active, datetime.now().isoformat())
+                )
+            
             self.conn.commit()
+            print(f"Set AI active for {user_id}: {active}")
         except Exception as e:
             print(f"Error setting AI active: {e}")
     
