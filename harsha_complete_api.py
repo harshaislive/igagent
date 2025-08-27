@@ -129,6 +129,15 @@ class HarshaMemoryAPI:
             )
         ''')
         
+        # Add ai_active column if it doesn't exist (for existing databases)
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute("ALTER TABLE user_stats ADD COLUMN ai_active BOOLEAN DEFAULT FALSE")
+            self.conn.commit()
+            print("Added ai_active column to existing database")
+        except:
+            pass  # Column already exists
+        
         self.conn.commit()
         print("📚 Database ready!")
     
@@ -238,25 +247,24 @@ class HarshaMemoryAPI:
         """Use LLM to detect activation/deactivation intent"""
         try:
             intent_prompt = f"""
-            Analyze this message and determine if the user wants to:
-            1. ACTIVATE an AI alter ego/chatbot 
-            2. DEACTIVATE/STOP an AI alter ego/chatbot
-            3. NEITHER (normal conversation)
+            Classify this user message into one of three categories:
+            1. User wants to start chatting with a bot
+            2. User wants to stop chatting with a bot  
+            3. Regular conversation
 
             Message: "{message}"
 
             Examples:
-            - "talk to alter" → activate
-            - "I want to chat with your alter ego" → activate  
-            - "activate AI" → activate
-            - "turn on bot mode" → activate
-            - "bye alter" → deactivate
-            - "stop the AI" → deactivate
-            - "turn off bot" → deactivate
-            - "hello there" → neither
-            - "how are you" → neither
+            "talk to alter" → activate
+            "activate" → activate
+            "turn on" → activate
+            "bye alter" → deactivate
+            "stop" → deactivate
+            "turn off" → deactivate
+            "hello" → neither
+            "how are you" → neither
 
-            Respond with only: "activate", "deactivate", or "neither"
+            Reply with only: activate, deactivate, or neither
             """
             
             response = self.ai_client.chat.completions.create(
